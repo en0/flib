@@ -350,6 +350,7 @@ float __aeabi_fdiv(float a, float b) {
     return __aeabi_fdiv_struct(&ft_a, &ft_b);
 }
 
+/*
 float __aeabi_fdiv_struct(flib_float_t* ft_a, flib_float_t* ft_b) {
     flib_float_t ft_r;
 
@@ -381,19 +382,69 @@ float __aeabi_fdiv_struct(flib_float_t* ft_a, flib_float_t* ft_b) {
     flib_correct_radix(&ft_r);
     return __aeabi_fmul_struct(ft_a, &ft_r);
 }
+*/
+
+float __aeabi_fdiv_struct(flib_float_t* ft_a, flib_float_t* ft_b) {
+    flib_float_t ft_r;
+
+    uint64_t dividend = ft_a->mantissa | (ft_a->characteristic << 23);
+    uint64_t divisor = ft_b->mantissa | (ft_b->characteristic << 23);
+    uint32_t quotient = 0;
+
+    int n_exponent = (
+        (ft_a->exponent - 127) -
+        (ft_b->exponent - 127)
+    ) + 127;
+
+    if (ft_b->mantissa == 0 && ft_b->characteristic == 0 && ft_b->exponent == 0) {
+        /** This is infinity. It is a special value in FP structure. **/
+        ft_r.characteristic = 1;
+        ft_r.mantissa = 0;
+        ft_r.exponent = 255;
+        return flib_pack(&ft_r);
+    }
+
+    // Increase the percision but make sure divisor is greator then dividend
+    dividend <<= 31;
+    divisor <<= 32;
+
+    // This will messup my exponent. 
+    // So wee need to track them to subtract off the exponent after the divide.
+    int skips = 0;
+    int skip_flag = 0;
+
+    for(;divisor > 0 && quotient < (FLIB_MANTISSA_MASK | 0x800000); divisor>>=1) {
+        if(divisor > dividend){
+            if(skip_flag == 0) skips++;
+            quotient<<=1;
+        } else {
+            skip_flag = 1;
+            quotient = (quotient<<1 | 1);
+            dividend -= divisor;
+        }
+    }
+
+    ft_r.characteristic = FLIB_EXTRACT_PART(quotient, FLIB_CARRY_MASK, FLIB_CARRY_SHIFT);
+    ft_r.mantissa = FLIB_MASKOFF(quotient, FLIB_MANTISSA_MASK);
+    ft_r.exponent = n_exponent- skips;
+    ft_r.sign = (ft_a->sign + ft_b->sign) % 2;
+    return flib_pack(&ft_r);
+}
 
 
 #include <math.h>
 int main() {
 
     //float f1 = 16.0;
-    //float f2 = 0.00001;
-    //float f1 = 200000.5;
+    //float f2 = 0.00001; //**/
+    //float f1 = 200000.5; //**/
     //float f2 = -0.000025;
-    float f1 = 5.0;
-    float f2 = 1.75;
+    //float f1 = 5.0; //**/
+    //float f2 = 1.75; //**/
     //float f1 = 1;
     //float f2 = 0;
+    float f1 =  10.0;
+    float f2 = -0.1;
 
     float fa = __aeabi_fdiv(f1, f2);
     float fsa = f1 / f2;
