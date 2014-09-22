@@ -51,6 +51,7 @@ float __aeabi_fmul(float a, float b);
 float __aeabi_fmul_struct(flib_float_t* ft_a, flib_float_t* ft_b);
 float __aeabi_fdiv(float a, float b);
 float __aeabi_fdiv_struct(flib_float_t* ft_a, flib_float_t* ft_b);
+float __aeabi_ui2f(unsigned int i);
 
 
 void print_float_t(flib_float_t* s) {
@@ -452,6 +453,24 @@ float __aeabi_i2f(int i) {
     return flib_pack(&ft_r);
 }
 
+float __aeabi_ui2f(unsigned int i) {
+    flib_float_t ft_r;
+
+    ft_r.mantissa = 0;
+    ft_r.sign = 0;
+    ft_r.exponent = 127;
+
+    if( i == 0 ) {
+        ft_r.characteristic = 0;
+        ft_r.exponent = 0;
+    } else {
+        ft_r.characteristic = i;
+        ft_r.sign = 0;
+    }
+
+    return flib_pack(&ft_r);
+}
+
 
 #include <math.h>
 int main() {
@@ -464,7 +483,7 @@ int main() {
     //float f2 = 1.75; //**/
     //float f1 = 1;
     //float f2 = 0;
-    float f1 =  __aeabi_i2f(10);
+    float f1 =  __aeabi_ui2f(10u);
     float f2 = -0.1;
 
     float fa = __aeabi_fdiv(f1, f2);
