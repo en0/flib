@@ -350,7 +350,10 @@ float __aeabi_fdiv(float a, float b) {
     return __aeabi_fdiv_struct(&ft_a, &ft_b);
 }
 
-/*
+/* This function uses reciprocal division. It is much faster but sligtly less accurate.
+ * This method also requires Uldiv support. To remove dependencies i have replaced
+ * it with the function below that uses long division.
+ */ /*
 float __aeabi_fdiv_struct(flib_float_t* ft_a, flib_float_t* ft_b) {
     flib_float_t ft_r;
 
