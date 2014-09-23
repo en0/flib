@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <string.h>
 
 /*
     Bit Fields: S = sign, E = exponent, M = Mantissa
@@ -53,6 +54,14 @@ float __aeabi_fdiv(float a, float b);
 float __aeabi_fdiv_struct(flib_float_t* ft_a, flib_float_t* ft_b);
 float __aeabi_ui2f(unsigned int i);
 
+void ftoa(float f, char* buffer);
+float atof(char* buffer);
+
+/** Assist function. Problem case was no dependency on built-ins **/
+uint32_t __uipow(uint32_t  base, uint32_t exponent) {
+    if(exponent == 0) return 1;
+    return base * __uipow(base, --exponent);
+}
 
 void print_float_t(flib_float_t* s) {
     //DEBUGGING
@@ -471,9 +480,137 @@ float __aeabi_ui2f(unsigned int i) {
     return flib_pack(&ft_r);
 }
 
+void ftoa(float f, char* buffer) {
+
+    const char _ascii_rep[] = "0123456789";
+
+    // Space to hold the converted mantissa
+    char __mantissa_buffer[65];
+    char* __mantissa_buffer_ptr = (char*)(__mantissa_buffer);
+    __mantissa_buffer_ptr+=64;
+
+    // Space to hold the converted characteristic
+    char __characteristic_buffer[33];
+    char* __characteristic_buffer_ptr = (char*)(__characteristic_buffer);
+    __characteristic_buffer_ptr+=32;
+
+    // Break appart the floating point number and adjust the radix to 0
+    // this will put our whole number in characteristic and our rational number in mantissa
+    flib_float_t ft_r;
+    flib_explode(f, &ft_r);
+    flib_adjust_radix(&ft_r, -(ft_r.exponent-127), false);
+
+    uint64_t value = 0, base;
+
+    // Convert the mantissa to a integer representation.
+    // The mantissa is  power of 2 fraction. -1**2, -2**2, -3**2, ect.
+    for(base = 5000000000000000000ULL; ft_r.mantissa > 0 && base > 0; ft_r.mantissa<<=1, base>>=1) {
+        if((ft_r.mantissa & 0x400000) == 0x400000)
+            value += base;
+    }
+
+    // Convert the digits to ascii. Start at end of char pointer and work backwords.
+    *__mantissa_buffer_ptr = '\0';
+    __mantissa_buffer_ptr--;
+
+    // To know how many zeros to pad the output with, we assume 19 digits and decrement for each digit we place.
+    // The remain value in leading zeros will be the number of zeros that we need to pad.
+    int leading_zeros = 19;
+
+    do {
+        *__mantissa_buffer_ptr = _ascii_rep[value % 10];
+        __mantissa_buffer_ptr--;
+        leading_zeros--;
+    } while (value /= 10);
+
+    // padd in the leading zeros on the mantissa
+    while(leading_zeros-- > 0) {
+        *__mantissa_buffer_ptr = '0';
+        __mantissa_buffer_ptr--;
+    }
+
+    // Convert the characteristic to ascii. Start at end of char pointer and work backwords.
+    *__characteristic_buffer_ptr = '\0';
+    __characteristic_buffer_ptr--;
+    do {
+        *__characteristic_buffer_ptr = _ascii_rep[ft_r.characteristic % 10];
+        __characteristic_buffer_ptr--;
+    } while (ft_r.characteristic /= 10);
+
+    // Setup output buffer. Add sign if needed.
+    if(ft_r.sign == 1) { 
+        buffer[0] = '-';
+        buffer[1] = '\0';
+    } else {
+        buffer[0] = '\0';
+    }
+
+    // Copy in the characteristic and the mantissa
+    strncat(buffer, ++__characteristic_buffer_ptr, 32);
+    strcat(buffer, ".");
+    strncat(buffer, ++__mantissa_buffer_ptr, 6);
+}
+
+float atof(char* buffer) {
+
+    flib_float_t ft_r;
+
+    char __buffer[128];
+    char *__characteristic_buffer;
+    char *__mantissa_buffer;
+    int i, offset;
+
+    ft_r.characteristic = 0;
+    ft_r.mantissa = 0;
+    ft_r.exponent = 127;
+    ft_r.sign = 0;
+
+    strncpy(__buffer, buffer, 128);
+    __characteristic_buffer = strtok(__buffer, ".");
+    __mantissa_buffer = strtok(NULL, ".");
+
+    for(i = strlen(__characteristic_buffer) - 1, offset = 0; i >= 0; i--, offset++) {
+        if(__characteristic_buffer[i] == '-') { ft_r.sign = 1; }
+        else if(__characteristic_buffer[i] == '+') {}
+        else { ft_r.characteristic += (__characteristic_buffer[i] - 0x30) * __uipow(10, offset); }
+    }
+
+    float ret = flib_pack(&ft_r); float part = 0;
+    for(i = 0; i < strlen(__mantissa_buffer); i++) {
+
+        // Calcualte the value of this digit : (CHAR-0x30) / (10**(i+1))
+        part = __aeabi_fdiv(
+                __aeabi_i2f(__mantissa_buffer[i] - '0'),
+                __aeabi_i2f(__uipow(10, i+1))
+        );
+
+        // Add the value to the running total. Invert the addend if the target is negative
+        ret = __aeabi_fadd( ret, (ft_r.sign == 1 ? -part : part));
+    }
+
+    return ret;
+}
+
 
 #include <math.h>
 int main() {
+
+    char ascii_float[] = "123.0001";
+    float f = atof(ascii_float);
+    float cf = 123.0001;
+
+    printf("Value was:            %s\n"
+           "Value interprated as: %f\n"
+           "System Sayse:         %f\n",
+            ascii_float, f, cf);
+    return 0;
+
+    float theF = 44.0217781067;
+    char buffer[255] = {0};
+    ftoa(theF, buffer);
+    printf("Got:      %s\n", buffer);
+    printf("Expected: %f\n", theF);
+    return 0;
 
     //float f1 = 16.0;
     //float f2 = 0.00001; //**/
