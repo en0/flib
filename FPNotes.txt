@@ -1,0 +1,101 @@
+FPN Standards : IEEE 457 / IEC 60559:1989
+-------------------------------------------------------------
+
+Floating Point Numbers
+              sign   mantissa  exponent    Smallest    Largest
+32 Bit Word:  1 bit   23 bits   8 bits     1.2E-38     3.4E+38
+64 Bit Word:  1 bit   52 bits  11 bits     2.2E-308    1.8E+308
+
+SIGN    EXPONENT                     MANTISSA
+[1]  :  [1][2][3][4][5][6][7][8]  :  [1][2][3][4][5][6][7][8][9][A][B][C][D][E][F][10][11][12][13][14][15]
+
+
+Sign Bit:
+Uses Sign and Magnitude.
+
+0 denotes a Positive mantissa
+1 denotes a negative mantissa
+
+
+Exponent Bits:
+Stored as an unsigned integer with 00 and FF Reserved for special cases
+
+Value is calculated from the uint as follows.
+Real Exponent = {EXPONENT} - 127
+
+This makes the range -126 to 127
+
+
+Mantissa Bits:
+Stored as a unsigned integer
+Excluding Special cases, the mantissa is assumed to be 1.{MANTISSA}
+
+
+Example: 0x409000
+
+BIN    4    0     9    0     0    0
+HEX 0100 0000  1001 0000  0000 0000
+
+[0]  :  [1][0][0][0][0][0][0][1]  :  [0][0][1][0]...[0]
+
+NEGATIVE: FALSE
+UINT EXPONENT: 0x81 (129)
+EXPONENT: 129 - 127 = 2
+UINT MANTISSA: 0x20 (125)
+MANTISSA: 1.125
+
+Partial Answer: 1.125e+2 where 'e' = '* 2^EXPONENT'
+ANSWER: 4.5
+
+
+Special Cases:
+What about Zero?
+
+if Exponent == 00 && mantissa == 00
+    value = 0.00E+0
+
+if Exponent == 00 && mantissa != 00
+    /** These are called subnormal numbers **/
+    Real Exponent = 0 - 127
+    Real Mantissa = [1].[2][3][4][5]...[15]
+    /** That is to say the mantisa holds the value before the decimal **/
+
+Example: 0x00400000
+
+BIN     0    0     4    0     0    0     0    0
+HEX  0000 0000  0100 0000  0000 0000  0000 0000
+
+[0]  :  [0][0][0][0][0][0][0][0]  :  [1].[0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0][0]
+
+NEGATIVE: FALSE
+UINT EXPONENT: 0x00 (0)
+REAL EXPONENT: 0 - 127 = -127
+UINT MANTISSA: 0x01.00
+REAL MANTISSA: 1.00
+
+PARTIAL ANSWER: 1.00-127 where 'e' = '* 2^EXPOENT'
+ANSWER: 2^-127
+
+
+Special Case:
+What if the exponent is 0xFF and Mantissa is 0x00
+ it is INFINITY (+/- depending on sign bit) = 1.0/0
+
+What if the exponent is 0xFF and Mantissa is not 0x00
+ NaN = Not-a-number.
+
+
+Equality:
+  Since the values are not exactly accurate then this is an issue.
+  
+  Example: 1.1f == (1.05f + 1.05f) = FALSE
+  Why? - 1.1 is stored as 1.10000002. 1.05 + 1.05 is sotred as 1.099999999
+  You can only store 1/2, 1/4, 1/8 and other powers of 2 accuratly.
+
+
+Other Notes:
+Never use floats as a lookup key.
+Dont use equality checks on floating point numbers without very special care.
+  Example: 
+    static float e = 1.0e-6f
+    if(Math.Abs(f1 - f2) < e) /** Test for nearness **/
